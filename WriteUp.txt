@@ -1,0 +1,109 @@
+This is a write up of the tryhackme room rootMe. This is rated an easy room.
+Output will be cope pasted from my terminal into this doc not screenshotted. Mostly because screenshots break mt workflow.
+The IP address I was assigned for my machine is: 10.10.167.217
+
+To start I'm going to run a basic nmap -sS -A scan to see what we're dealing with.
+
+PORT   STATE SERVICE REASON         VERSION
+22/tcp open  ssh     syn-ack ttl 63 OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 4a:b9:16:08:84:c2:54:48:ba:5c:fd:3f:22:5f:22:14 (RSA)
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9irIQxn1jiKNjwLFTFBitstKOcP7gYt7HQsk6kyRQJjlkhHYuIaLTtt1adsWWUhAlMGl+97TsNK93DijTFrjzz4iv1Zwpt2hhSPQG0GibavCBf5GVPb6TitSskqpgGmFAcvyEFv6fLBS7jUzbG50PDgXHPNIn2WUoa2tLPSr23Di3QO9miVT3+TqdvMiphYaz0RUAD/QMLdXipATI5DydoXhtymG7Nb11sVmgZ00DPK+XJ7WB++ndNdzLW9525v4wzkr1vsfUo9rTMo6D6ZeUF8MngQQx5u4pA230IIXMXoRMaWoUgCB6GENFUhzNrUfryL02/EMt5pgfj8G7ojx5
+|   256 a9:a6:86:e8:ec:96:c3:f0:03:cd:16:d5:49:73:d0:82 (ECDSA)
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBERAcu0+Tsp5KwMXdhMWEbPcF5JrZzhDTVERXqFstm7WA/5+6JiNmLNSPrqTuMb2ZpJvtL9MPhhCEDu6KZ7q6rI=
+|   256 22:f6:b5:a6:54:d9:78:7c:26:03:5a:95:f3:f9:df:cd (ED25519)
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC4fnU3h1O9PseKBbB/6m5x8Bo3cwSPmnfmcWQAVN93J
+80/tcp open  http    syn-ack ttl 63 Apache httpd 2.4.29 ((Ubuntu))
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not set
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: HackIT - Home
+No exact OS matches for host (If you know what OS is running on it, see https://nmap.org/submit/ ).
+
+With the information from this scan we can already answer the first 3 questions in the room. 
+Both the ports are quite interesting but the next question tells us "Find directories on the web server using the GoBuster tool." So I guess next we turn to GoBuster.
+
+gobuster dir -u http://10.10.167.217:80 -w /usr/share/wordlists/dirb/common.txt
+With the above command we find the following output. 
+
+===============================================================
+2021/05/04 11:08:25 Starting gobuster in directory enumeration mode
+===============================================================
+/.hta                 (Status: 403) [Size: 278]
+/.htpasswd            (Status: 403) [Size: 278]
+/.htaccess            (Status: 403) [Size: 278]
+/css                  (Status: 301) [Size: 312] [--> http://10.10.167.217/css/]
+/index.php            (Status: 200) [Size: 616]                                
+/js                   (Status: 301) [Size: 311] [--> http://10.10.167.217/js/] 
+/panel                (Status: 301) [Size: 314] [--> http://10.10.167.217/panel/]
+/server-status        (Status: 403) [Size: 278]                                  
+/uploads              (Status: 301) [Size: 316] [--> http://10.10.167.217/uploads/]
+                                                                                   
+===============================================================
+2021/05/04 11:09:44 Finished
+===============================================================
+
+Click complete on question 4 and the answer to question 5 is in the text above. We have Completed the Reconnaissance task.
+
+=====================================================================================
+
+GETTING A SHELL
+
+====================================================================================
+
+When loading into the website and going to the /panel/ page I found an upload page where I can try upload a shell. 
+
+The shell I used was the pentest monkey shell, however the upload did not accept .php files. Before I ran a burp test I checked .php5 from past experience and it was accecpted!
+
+So I uploaded the shell and accessed through uploads/name.php5
+
+Word of interest the shell did not seem to work on my machine on any other ports except 1234. My netcat didn't seem to pick up the connection so it turned this quick and easy CTF into a much longer endeavour.
+
+logging in with the shell I ran whoami and found i am, as expected: www-data
+
+The user flag after a little looksie around the system can be read with the command:
+	cat var/www/user.txt
+		and the flag is: (Right there if you're following this write up)
+
+
+=======================================================================================
+PRIVLEDGE ESCALATION
+=======================================================================================
+
+Search for SUID permission and find the weird file.
+For that you use this command 
+	find / -user root -perm /4000
+
+In the resultant list you can find the answer to the THM room
+	(Hint its in these)
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/snapd/snap-confine
+/usr/lib/x86_64-linux-gnu/lxc/lxc-user-nic
+/usr/lib/eject/dmcrypt-get-device
+/usr/lib/openssh/ssh-keysign
+/usr/lib/policykit-1/polkit-agent-helper-1
+/usr/bin/traceroute6.iputils
+/usr/bin/newuidmap
+/usr/bin/newgidmap
+/usr/bin/chsh
+/usr/bin/python
+/usr/bin/chfn
+/usr/bin/gpasswd
+/usr/bin/sudo
+/usr/bin/newgrp
+/usr/bin/passwd
+/usr/bin/pkexec
+
+The hint for the next question leads us to gtfo bins to find the way to escalate our privledges using the answer from the previous question
+
+I'm not giving you the link to the page nor will I write the command here. You use the File read command in gtfobins.
+
+And the textfile is where the root.txt file normally is /root/root.txt
+
+ALL THE BEST AND I HOPED THIS HELPED YOU ALONG THE WAY
+
+
